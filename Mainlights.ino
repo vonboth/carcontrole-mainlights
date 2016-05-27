@@ -1,67 +1,67 @@
 #include <Arduino.h>
 #include "avr/sleep.h"
 
-#define MAINLIGHT 12
-#define DIPLIGHT 11
-#define FOGLIGHT 10
-#define BACKLIGHT 9
-#define PARKLIGHT 8
-#define BTN_MAINLIGHT 2
-#define BTN_DIPLIGHT 3
-#define BTN_FOGLIGHT 4
-#define BTN_PARKLIGHT 5
-//PIN 0 == INTERRUPT
-#define ENGINE_ON 0 //interrupt signal pin
-
-//TODO: Standlicht!!
+#define DIPLIGHT 8      //output dip lights
+#define PARKLIGHT 9     //output park lights
+#define FOGLIGHT 11     //output fog lights
+#define REARLIGHT 12    //output rear lights
+#define MAINLIGHT 13    //output main/beam
+#define BTN_FOGLIGHT 4  //button fog lights
+#define BTN_MAINLIGHT 5 //button main/beam
+#define BTN_DIPLIGHT 6  //button dip lights
+#define BTN_PARKLIGHT 7 //input park lights (switched by key)
+#define ENGINE_ON 3     //interrupt signal pin
+#define DELAY 100       //delay time [ms]
+#define MODULO 5        //corresponds to delay and loop. e.g. flash every 500 ms (100 * 5)
+#define SLEEP_TIME 10   //delay before Atmega goes to sleep [minutes]
 
 int currentState = 0;
 int fogState = 0;
 long time = 0;
-long turnOffTime = 0;
+long powerOffTime = 0;
 int enableSleep = 0;
-int count = 0;
+unsigned int count = 0;
 
-void handleStates(int state) {
+void handleLightState(int state) {
     switch(state) {
         case 1://lights on, fog off, main off
             digitalWrite(FOGLIGHT, LOW);
-            digitalWrite(BACKLIGHT, HIGH);
+            digitalWrite(REARLIGHT, HIGH);
             digitalWrite(DIPLIGHT, HIGH);
             digitalWrite(MAINLIGHT, LOW);
             break;
 
         case 2://lights on, fog off, main on
             digitalWrite(FOGLIGHT, LOW);
-            digitalWrite(BACKLIGHT, HIGH);
+            digitalWrite(REARLIGHT, HIGH);
             digitalWrite(DIPLIGHT, LOW);
             digitalWrite(MAINLIGHT, HIGH);
             break;
 
         case 3://lights with fog on
             digitalWrite(FOGLIGHT, HIGH);
-            digitalWrite(BACKLIGHT, HIGH);
+            digitalWrite(REARLIGHT, HIGH);
             digitalWrite(DIPLIGHT, HIGH);
             digitalWrite(MAINLIGHT, LOW);
             break;
 
         case 4://main lights with fog on
             digitalWrite(FOGLIGHT, HIGH);
-            digitalWrite(BACKLIGHT, HIGH);
+            digitalWrite(REARLIGHT, HIGH);
             digitalWrite(DIPLIGHT, LOW);
             digitalWrite(MAINLIGHT, HIGH);
             break;
 
         case 5: //only main lights high
             digitalWrite(FOGLIGHT, LOW);
-            digitalWrite(BACKLIGHT, LOW);
+            digitalWrite(REARLIGHT, LOW);
             digitalWrite(DIPLIGHT, LOW);
             digitalWrite(MAINLIGHT, HIGH);
             break;
 
         case 6: //park lights on
             digitalWrite(FOGLIGHT, LOW);
-            digitalWrite(BACKLIGHT, LOW);
+            digitalWrite(REARLIGHT, LOW);
             digitalWrite(DIPLIGHT, LOW);
             digitalWrite(MAINLIGHT, LOW);
             digitalWrite(PARKLIGHT, HIGH);
@@ -69,7 +69,7 @@ void handleStates(int state) {
             
         default://all off
             digitalWrite(FOGLIGHT, LOW);
-            digitalWrite(BACKLIGHT, LOW);
+            digitalWrite(REARLIGHT, LOW);
             digitalWrite(DIPLIGHT, LOW);
             digitalWrite(MAINLIGHT, LOW);
             break;
@@ -81,20 +81,21 @@ void handleStates(int state) {
  */
 void wakeUp() {
     enableSleep = 0;
-    handleStates(0);
+    handleLightState(0);
 }
 
 /**
  * power down device
  */
 void gotoSleep() {
+    handleLightState(0);
     set_sleep_mode(SLEEP_MODE_PWR_DOWN);
     sleep_enable();
-    attachInterrupt(0, wakeUp, HIGH);
+    attachInterrupt(1, wakeUp, HIGH);
 
     sleep_mode();
     sleep_disable();
-    detachInterrupt(0);
+    detachInterrupt(1);
 }
 
 /**
@@ -102,19 +103,26 @@ void gotoSleep() {
  */
 void setup() {
     //Serial.begin(9600);
-    // put your setup code here, to run once:
+    //setup output pins
     pinMode(MAINLIGHT, OUTPUT);
     pinMode(DIPLIGHT, OUTPUT);
     pinMode(FOGLIGHT, OUTPUT);
-    pinMode(BACKLIGHT, OUTPUT);
+    pinMode(REARLIGHT, OUTPUT);
+    pinMode(PARKLIGHT, OUTPUT);
+
+    //setup button pins
     pinMode(BTN_MAINLIGHT, INPUT);
+    digitalWrite(BTN_MAINLIGHT, HIGH); //enable internal pullup
     pinMode(BTN_DIPLIGHT, INPUT);
+    digitalWrite(BTN_DIPLIGHT, HIGH);  //enable internal pullup
     pinMode(BTN_FOGLIGHT, INPUT);
+    digitalWrite(BTN_FOGLIGHT, HIGH);  //enable internal pullup
+    pinMode(BTN_PARKLIGHT, INPUT);
     pinMode(ENGINE_ON, INPUT);
 
-    handleStates(0); //turn all off on start
+    handleLightState(0); //turn all off on start
 
-    attachInterrupt(0, wakeUp, HIGH); //attach wakeup
+    attachInterrupt(1, wakeUp, HIGH); //wake up on interrupt 1 == PIN 3 == power switch
 }
 
 /**
@@ -124,70 +132,70 @@ void loop() {
 
     time = millis();
 
-    int readMain = digitalRead(BTN_MAINLIGHT);
-    int readDip = digitalRead(BTN_DIPLIGHT);
-    int readFog = digitalRead(BTN_FOGLIGHT);
-    int readPark = digitalRead(BTN_PARKLIGHT);
+    int readButtonMainLight = digitalRead(BTN_MAINLIGHT);
+    int readButtonDipLight = digitalRead(BTN_DIPLIGHT);
+    int readButtonFogLight = digitalRead(BTN_FOGLIGHT);
+    int readParkLight = digitalRead(BTN_PARKLIGHT);
     int readPowerOn = digitalRead(ENGINE_ON);
 
     //check if we will suspend
     if (enableSleep == 1) {
         if (readPowerOn == LOW &&
-            readPark == LOW &&
-            (time > (turnOffTime * 60 *1000)) ) {
+            readParkLight == LOW &&
+            (time > (SLEEP_TIME * 60 *1000)) ) {
             gotoSleep();
         }
     }
 
     //handle buttons
-    if (readDip == HIGH) { //lights on
+    if (readButtonDipLight == LOW) { //lights on
   
         //test if fog light button pressed and toggle it
-        if (readFog == HIGH && count%5 == 0) {
+        if (readButtonFogLight == LOW && count % MODULO == 0) {
             fogState = !fogState;
         }
 
         if (fogState == 1) {
             //fog on, dip on, main off
-            if (readMain == LOW) {
+            if (readButtonMainLight == HIGH) {
                 currentState = 3;
             }
             //fog light on, dip off, main on
-            if (readMain == HIGH) {
+            if (readButtonMainLight == LOW) {
                 currentState = 4;
             }
         } else {
             //fog off, dip on, main off
-            if (readMain == LOW) {
+            if (readButtonMainLight == HIGH) {
                 currentState = 1;
             }
             //fog off, dip off, main on
-            if (readMain == HIGH) {
+            if (readButtonMainLight == LOW) {
                 currentState = 2;
             }
         }
 
-    } else if (readDip == LOW && readMain == HIGH) {
+    } else if (readButtonDipLight == HIGH && readButtonMainLight == LOW) {
         //using main light on daytime
         currentState = 5; // only main lights on
         
-    } else if (readDip == LOW && readPark == HIGH && readPowerOn == LOW) {
+    } else if (readPowerOn == LOW && readParkLight == HIGH) {
         enableSleep = 0;
         // swith on park lights
         currentState = 6;
         
-    } else if (readPowerOn == LOW && readPark == LOW && enableSleep == 0) {
+    } else if (readPowerOn == LOW && readParkLight == LOW && enableSleep == 0) {
+        powerOffTime = time;
         enableSleep = 1;
-        turnOffTime = millis();
-        
+
     } else {
         //turn all off
         currentState = 0;
         fogState = 0;
     }
 
-    handleStates(currentState);
+    handleLightState(currentState);
 
     count++;
-    delay(100);
+    delay(DELAY);
 }
