@@ -72,6 +72,7 @@ void handleLightState(int state) {
             digitalWrite(REARLIGHT, LOW);
             digitalWrite(DIPLIGHT, LOW);
             digitalWrite(MAINLIGHT, LOW);
+            digitalWrite(PARKLIGHT, LOW);
             break;
     }
 }
@@ -132,9 +133,9 @@ void loop() {
 
     time = millis();
 
-    int readButtonMainLight = digitalRead(BTN_MAINLIGHT);
-    int readButtonDipLight = digitalRead(BTN_DIPLIGHT);
-    int readButtonFogLight = digitalRead(BTN_FOGLIGHT);
+    int readBtnMainLight = digitalRead(BTN_MAINLIGHT);
+    int readBtnDipLight = digitalRead(BTN_DIPLIGHT);
+    int readBtnFogLight = digitalRead(BTN_FOGLIGHT);
     int readParkLight = digitalRead(BTN_PARKLIGHT);
     int readPowerOn = digitalRead(ENGINE_ON);
 
@@ -142,40 +143,40 @@ void loop() {
     if (enableSleep == 1) {
         if (readPowerOn == LOW &&
             readParkLight == LOW &&
-            (time > (SLEEP_TIME * 60 *1000)) ) {
+            (time > powerOffTime + 5*1000) ) {
             gotoSleep();
         }
     }
 
     //handle buttons
-    if (readButtonDipLight == LOW) { //lights on
-  
+    if (readBtnDipLight == LOW) { //lights on
+
         //test if fog light button pressed and toggle it
-        if (readButtonFogLight == LOW && count % MODULO == 0) {
+        if (readBtnFogLight == LOW && count % MODULO == 0) {
             fogState = !fogState;
         }
 
         if (fogState == 1) {
             //fog on, dip on, main off
-            if (readButtonMainLight == HIGH) {
+            if (readBtnMainLight == HIGH) {
                 currentState = 3;
             }
             //fog light on, dip off, main on
-            if (readButtonMainLight == LOW) {
+            if (readBtnMainLight == LOW) {
                 currentState = 4;
             }
         } else {
             //fog off, dip on, main off
-            if (readButtonMainLight == HIGH) {
+            if (readBtnMainLight == HIGH) {
                 currentState = 1;
             }
             //fog off, dip off, main on
-            if (readButtonMainLight == LOW) {
+            if (readBtnMainLight == LOW) {
                 currentState = 2;
             }
         }
 
-    } else if (readButtonDipLight == HIGH && readButtonMainLight == LOW) {
+    } else if (readBtnDipLight == HIGH && readBtnMainLight == LOW) {
         //using main light on daytime
         currentState = 5; // only main lights on
         
@@ -183,15 +184,16 @@ void loop() {
         enableSleep = 0;
         // swith on park lights
         currentState = 6;
-        
-    } else if (readPowerOn == LOW && readParkLight == LOW && enableSleep == 0) {
-        powerOffTime = time;
-        enableSleep = 1;
-
     } else {
         //turn all off
         currentState = 0;
         fogState = 0;
+    }
+
+    //check
+    if (readPowerOn == LOW && readParkLight == LOW && enableSleep == 0) {
+        powerOffTime = time;
+        enableSleep = 1;
     }
 
     handleLightState(currentState);
