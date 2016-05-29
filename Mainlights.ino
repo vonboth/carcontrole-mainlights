@@ -143,7 +143,7 @@ void loop() {
     if (enableSleep == 1) {
         if (readPowerOn == LOW &&
             readParkLight == LOW &&
-            (time > powerOffTime + 5*1000) ) {
+            (time > (powerOffTime + SLEEP_TIME * 60 *1000 ))) {
             gotoSleep();
         }
     }
