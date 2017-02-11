@@ -1,19 +1,19 @@
 #include <Arduino.h>
 #include "avr/sleep.h"
 
-#define DIPLIGHT 8      //output dip lights
-#define PARKLIGHT 9     //output park lights
-#define FOGLIGHT 11     //output fog lights
-#define REARLIGHT 12    //output rear lights
-#define MAINLIGHT 13    //output main/beam
-#define BTN_FOGLIGHT 4  //button fog lights
-#define BTN_MAINLIGHT 5 //button main/beam
-#define BTN_DIPLIGHT 6  //button dip lights
-#define BTN_PARKLIGHT 7 //input park lights (switched by key)
-#define ENGINE_ON 3     //interrupt signal pin
-#define DELAY 100       //delay time [ms]
-#define MODULO 5        //corresponds to delay and loop. e.g. flash every 500 ms (100 * 5)
-#define SLEEP_TIME 10   //delay before Atmega goes to sleep [minutes]
+#define DIPLIGHT 8        //output dip lights
+#define PARKLIGHT 9       //output park lights
+#define FOGLIGHT 11       //output fog lights
+#define REARLIGHT 12      //output rear lights
+#define MAINLIGHT 13      //output main/beam
+#define BTN_FOGLIGHT 4    //button fog lights
+#define BTN_MAINLIGHT 5   //button main/beam
+#define BTN_DIPLIGHT 6    //button dip lights
+#define BTN_PARKLIGHT 7   //input park lights (switched by key)
+#define ENGINE_ON 3       //interrupt signal pin
+#define DELAY 100         //delay time [ms]
+#define MODULO 5          //corresponds to delay and loop. e.g. flash every 500 ms (100 * 5)
+#define SLEEP_TIME 120000 //delay before Atmega goes to sleep [2 minutes]
 
 int currentState = 0;
 int fogState = 0;
@@ -103,7 +103,6 @@ void gotoSleep() {
  * setup device
  */
 void setup() {
-    //Serial.begin(9600);
     //setup output pins
     pinMode(MAINLIGHT, OUTPUT);
     pinMode(DIPLIGHT, OUTPUT);
@@ -122,8 +121,6 @@ void setup() {
     pinMode(ENGINE_ON, INPUT);
 
     handleLightState(0); //turn all off on start
-
-    attachInterrupt(1, wakeUp, HIGH); //wake up on interrupt 1 == PIN 3 == power switch
 }
 
 /**
@@ -143,8 +140,10 @@ void loop() {
     if (enableSleep == 1) {
         if (readPowerOn == LOW &&
             readParkLight == LOW &&
-            (time > (powerOffTime + SLEEP_TIME * 60 *1000 ))) {
+            (time > (powerOffTime + SLEEP_TIME))) {
             gotoSleep();
+        } else if(readPowerOn == HIGH) {
+            enableSleep = 0;
         }
     }
 
